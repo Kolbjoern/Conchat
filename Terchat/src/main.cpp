@@ -11,6 +11,8 @@ unsigned short PORTCLIENT = 43001;
 std::string nickname;
 std::string serverIP;
 
+HANDLE console;
+
 void read();
 void write();
 
@@ -32,37 +34,30 @@ void server()
 
 	std::cout << "waiting for messages..." << std::endl;
 	while (true)
-	{	
-		
+	{
 		packet.clear();
 		if (socket.receive(packet, sender, port) != sf::Socket::Done)
 		{
-			Sleep(50);//reduce cpu usage
+			std::cout << "message received failed" << std::endl;
 		}
 		else
 		{
 			std::string message;
 			std::string nickname;
+			std::string color;
 
-			if (packet >> message >> nickname)
+			if (packet >> message >> nickname >> color)
 			{
 				// register if it's a new client
-				if (false)
+				
+				if (clients.find(sender.toString()) == clients.end())
 				{
-					if (clients.find(sender.toString()) == clients.end())
-					{
-						std::cout << "new client registered" << port << std::endl;
-						clients.insert({ sender.toString(), nickname });
-					}
+					std::cout << "new client registered: " << nickname << std::endl;
+					clients.insert({ sender.toString(), nickname });
 				}
-				else
-				{
-					if (clients.find(nickname) == clients.end())
-					{
-						std::cout << "new client registered" << std::endl;
-						clients.insert({ nickname, sender.toString() });
-					}
-				}
+
+				if (message == "")
+					continue;
 
 				for (std::pair<std::string, std::string> client : clients)
 				{
@@ -71,12 +66,8 @@ void server()
 
 					sf::Packet sendPacket;
 					sendPacket.clear();
-					sendPacket << message << nickname;
-					if (socket.send(sendPacket, client.second, PORTCLIENT) == sf::Socket::Done)
-					{
-						std::cout << "Sent: " << message << std::endl;
-					}
-					else
+					sendPacket << message << nickname << color;
+					if (socket.send(sendPacket, client.first, PORTCLIENT) != sf::Socket::Done)
 					{
 						std::cout << "server message failed" << std::endl;
 					}
@@ -96,12 +87,6 @@ void client()
 	
 	if (type == "w")
 	{
-		std::cout << "Server address: ";
-		std::cin >> serverIP;
-		std::cin.ignore(); //clears newline
-
-		std::cout << "Your nickname: ";
-		std::getline(std::cin, nickname);
 		write();
 	}
 	else
@@ -130,10 +115,14 @@ void read()
 		{
 			std::string receivedMessage;
 			std::string messenger;
+			std::string color;
 
-			if (receivedPacket >> receivedMessage >> messenger)
+			if (receivedPacket >> receivedMessage >> messenger >> color)
 			{
-				std::cout << "<" << messenger << "> " << receivedMessage << std::endl;
+				SetConsoleTextAttribute(console, std::stoi(color));
+				std::cout << "<" << messenger << "> ";
+				SetConsoleTextAttribute(console, 15);
+				std::cout << receivedMessage << std::endl;
 			}
 		}
 		else
@@ -148,17 +137,39 @@ void write()
 	sf::UdpSocket socket;
 	sf::Packet packet;
 
+	std::cout << "Server address: ";
+	std::cin >> serverIP;
+	std::cin.ignore(); //clears newline
+
+	std::cout << "Your nickname: ";
+	std::getline(std::cin, nickname);
+
+	for (int i = 0; i < 16; i++)
+	{
+		SetConsoleTextAttribute(console, i);
+		std::cout << "(" << i << ")" << std::endl;
+	}
+
+	std::string color;
+	std::cout << "Your color: ";
+	std::getline(std::cin, color);
+
 	while (true)
 	{
 		std::string message;
 		std::getline(std::cin, message);
 		packet.clear();
-		packet << message << nickname;
+		packet << message << nickname << color;
 
 		if (socket.send(packet, serverIP, PORTSERVER) != sf::Socket::Done)
 		{
 			//error
 			std::cout << "client message failed" << std::endl;
+		}
+
+		for (int i = 0; i < 100; i++)
+		{
+			std::cout << "" << std::endl;
 		}
 	}
 }
@@ -169,6 +180,8 @@ int main()
 	std::cout << "Do you want to be a server (s) or a client (c)? ";
 	std::cin >> who;
 	std::cin.ignore(); //clears newline
+
+	console = GetStdHandle(STD_OUTPUT_HANDLE);
 
 	if (who == 'c')
 		client();
